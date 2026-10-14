@@ -1,0 +1,158 @@
+@startuml SyncSphere_Sequence_Diagrams
+skinparam monochrome false
+skinparam roundcorner 6
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+' ==========================================================
+' WORKFLOW A: REGISTRATION & LOGIN
+' ==========================================================
+== Workflow A: User Registration, Login & Session Handshake ==
+
+actor User
+participant "React Frontend\n(AuthContext)" as FE
+participant "Express Router\n(/api/v1/auth)" as API
+participant "AuthService" as Svc
+database "PostgreSQL\n(Prisma)" as DB
+
+User -> FE : Enter registration details (Name, Email, Password)
+FE -> API : POST /api/v1/auth/register
+API -> Svc : registerUser(data)
+Svc -> Svc : Validate email format & hash password (bcrypt 12 rounds)
+Svc -> DB : prisma.user.create()
+DB --> Svc : User record created
+Svc --> API : Sanitized User profile
+API --> FE : 201 Created
+
+User -> FE : Enter login credentials
+FE -> API : POST /api/v1/auth/login
+API -> Svc : authenticate(email, password)
+Svc -> DB : prisma.user.findUnique({ email })
+DB --> Svc : User with password hash
+Svc -> Svc : bcrypt.compare(password, hash)
+Svc -> DB : prisma.session.create({ userId, expiresAt })
+DB --> Svc : Session record
+Svc --> API : Set HTTP-only Cookie (SameSite=Lax, Secure)
+API --> FE : 200 OK (User object + Session Cookie)
+FE -> FE : Update AuthState, Redirect to /dashboard
+
+' ==========================================================
+' WORKFLOW B: TEAM, MEMBER, PROJECT & MILESTONES
+' ==========================================================
+== Workflow B: Create Team, Add Members, Create Project & Add Milestone ==
+
+actor "Team Leader" as Leader
+participant "React Frontend" as FE
+participant "Express REST API" as API
+participant "Team / Project Service" as Svc
+database "PostgreSQL" as DB
+
+Leader -> FE : Fill Team Form ("Alpha Engineering")
+FE -> API : POST /api/v1/teams
+API -> Svc : createTeam(leaderId, name)
+group Transactional Creation
+    Svc -> DB : prisma.team.create()
+    Svc -> DB : prisma.teamMembership.create(LEADER)
+    Svc -> DB : prisma.sharedCalendar.create({ teamId })
+end
+DB --> Svc : Team with SharedCalendar provisioned (1:1)
+Svc --> API : Team resource
+API --> FE : 201 Created
+
+Leader -> FE : Invite Member by Email
+FE -> API : POST /api/v1/teams/:id/members
+API -> Svc : addMember(teamId, userEmail, role='MEMBER')
+Svc -> DB : prisma.teamMembership.create()
+DB --> Svc : Membership created
+API --> FE : 200 Member added
+
+Leader -> FE : Create Project ("Core Platform Refactor", deadline)
+FE -> API : POST /api/v1/projects
+API -> Svc : createProject(teamId, projectData)
+group Transactional Creation
+    Svc -> DB : prisma.project.create({ status: 'ACTIVE', progress: 0 })
+    Svc -> DB : prisma.discussionBoard.create({ projectId })
+end
+DB --> Svc : Project with DiscussionBoard provisioned (1:1)
+API --> FE : 201 Created
+
+Leader -> FE : Add Milestone ("Architecture Freeze", dueDate)
+FE -> API : POST /api/v1/projects/:id/milestones
+API -> Svc : createMilestone(projectId, milestoneData)
+Svc -> DB : prisma.milestone.create()
+DB --> Svc : Milestone record
+API --> FE : 201 Created
+
+' ==========================================================
+' WORKFLOW C: TASK MANAGEMENT & KANBAN DRAG-AND-DROP
+' ==========================================================
+== Workflow C: Task Lifecycle, Kanban Drag & Progress Recalculation ==
+
+actor "Team Member" as Member
+participant "Kanban Board\n(dnd-kit)" as KB
+participant "Task Controller" as TC
+participant "Task Service" as TS
+participant "Project Service" as PS
+database "PostgreSQL" as DB
+
+Leader -> KB : Create Task ("Implement Auth", Priority=HIGH, Assignee=Member)
+KB -> TC : POST /api/v1/tasks
+TC -> TS : createTask(taskData)
+TS -> DB : prisma.task.create() & prisma.taskAssignment.create()
+DB --> TS : Task created
+TS --> TC : 201 Created
+TC --> KB : Render Task in "To Do" Column
+
+Member -> KB : Drag card from "To Do" to "In Progress"
+KB -> TC : PATCH /api/v1/tasks/:id/status { status: 'IN_PROGRESS' }
+TC -> TS : updateTaskStatus(taskId, 'IN_PROGRESS')
+TS -> DB : prisma.task.update()
+DB --> TS : Task updated
+TS --> TC : 200 OK
+
+Member -> KB : Drag card to "Completed"
+KB -> TC : PATCH /api/v1/tasks/:id/status { status: 'COMPLETED' }
+TC -> TS : updateTaskStatus(taskId, 'COMPLETED')
+TS -> DB : prisma.task.update()
+TS -> PS : recalculateProjectProgress(projectId)
+PS -> DB : Count total tasks and completed tasks
+DB --> PS : { total: 10, completed: 8 }
+PS -> DB : prisma.project.update({ progress: 80 })
+DB --> PS : Project progress updated (80%)
+PS --> TS : Progress recalculated
+TS --> TC : 200 OK (Task completed + Progress refreshed)
+TC --> KB : Move card & update Project Progress widget
+
+' ==========================================================
+' WORKFLOW E: MEETING SCHEDULING & SHARED CALENDAR SYNC
+' ==========================================================
+== Workflow E: Schedule Meeting, Sync Shared Calendar & Reminders ==
+
+actor "Team Leader" as Host
+participant "Meetings Page" as MP
+participant "Meeting Controller" as MC
+participant "Meeting Service" as MS
+participant "Reminder Scheduler" as Rem
+database "PostgreSQL" as DB
+
+Host -> MP : Submit Meeting ("Sprint Planning", Time, Participants)
+MP -> MC : POST /api/v1/meetings
+MC -> MS : scheduleMeeting(teamId, meetingData, participants)
+group Transactional Meeting Creation
+    MS -> DB : prisma.meeting.create()
+    MS -> DB : prisma.meetingParticipant.createMany()
+    MS -> DB : prisma.reminder.create({ triggerTime: meetingTime - 15m })
+end
+DB --> MS : Meeting scheduled
+MS --> MC : 201 Created
+MC --> MP : Display meeting
+
+note over Rem, DB : Background poller checks every 60s
+Rem -> DB : Find pending reminders where triggerTime <= now
+DB --> Rem : [ Reminder for Sprint Planning ]
+Rem -> DB : prisma.notification.createMany([ participantNotifications ])
+Rem -> DB : prisma.reminder.update({ isTriggered: true })
+DB --> Rem : Notifications persisted
+Rem --> Member : In-app badge count incremented
+
+@enduml

@@ -1,0 +1,292 @@
+@startuml SyncSphere_Class_Diagram
+skinparam classAttributeIconSize 0
+skinparam monochrome false
+skinparam roundcorner 8
+skinparam shadowing false
+skinparam class {
+    BackgroundColor #F8FAFC
+    ArrowColor #334155
+    BorderColor #64748B
+}
+
+title SyncSphere — Domain Class Diagram (Section 6 & 7 Specification)
+
+' ==========================================
+' USER & ROLES (UML INHERITANCE / RBAC)
+' ==========================================
+
+class User {
+    + id : int
+    + email : String
+    + password : String
+    + profile : String
+    + role : String
+    + createdAt : DateTime
+    + updatedAt : DateTime
+    + register() : User
+    + login() : Session
+    + logout() : void
+    + updateProfile(profileData) : User
+    + changePassword(oldPass, newPass) : boolean
+    + viewProfile() : UserProfile
+}
+
+class Admin {
+    + manageUsers() : List<User>
+    + viewReports() : List<Report>
+    + deactivateUser(userId: int) : boolean
+}
+
+class TeamLeader {
+    + createTeam(name: String) : Team
+    + manageTeam(teamId: int) : Team
+    + manageProject(projectId: int) : Project
+    + addMember(teamId: int, userId: int) : void
+    + removeMember(teamId: int, userId: int) : void
+    + publishAnnouncement(boardId: int, text: String) : Announcement
+}
+
+class TeamMember {
+    + joinTeam(teamId: int) : void
+    + viewAssignedTasks() : List<Task>
+    + participateInMeeting(meetingId: int) : void
+    + updateTaskProgress(taskId: int, status: String) : Task
+    + addComment(taskId: int, text: String) : Comment
+}
+
+User <|-- Admin
+User <|-- TeamLeader
+User <|-- TeamMember
+
+class Session {
+    + id : String
+    + userId : int
+    + data : String
+    + expiresAt : DateTime
+    + createdAt : DateTime
+}
+
+' ==========================================
+' TEAM, PROJECT & MILESTONES
+' ==========================================
+
+class Team {
+    + id : int
+    + name : String
+    + description : String
+    + createdAt : DateTime
+    + addMember(user: User, role: String) : void
+    + removeMember(userId: int) : void
+    + getMembers() : List<User>
+}
+
+class TeamMembership {
+    + id : int
+    + teamId : int
+    + userId : int
+    + role : String
+    + joinedAt : DateTime
+}
+
+class Project {
+    + id : int
+    + teamId : int
+    + title : String
+    + desc : String
+    + deadline : Date
+    + status : String
+    + progress : int
+    + createdAt : DateTime
+    + calculateProgress() : int
+    + updateStatus(status: String) : void
+}
+
+class Milestone {
+    + id : int
+    + projectId : int
+    + title : String
+    + dueDate : Date
+    + isCompleted : boolean
+}
+
+' ==========================================
+' TASK & WORKFLOW ENTITIES
+' ==========================================
+
+class Task {
+    + id : int
+    + projectId : int
+    + title : String
+    + desc : String
+    + priority : String
+    + dueDate : Date
+    + status : String
+    + createdAt : DateTime
+    + assignUser(userId: int) : void
+    + updateStatus(newStatus: String) : void
+    + addComment(comment: Comment) : void
+    + attachFile(file: FileAttachment) : void
+}
+
+class TaskAssignment {
+    + id : int
+    + taskId : int
+    + userId : int
+    + assignedAt : DateTime
+}
+
+class Comment {
+    + id : int
+    + taskId : int
+    + authorId : int
+    + text : String
+    + timestamp : DateTime
+}
+
+class FileAttachment {
+    + id : int
+    + taskId : int
+    + uploaderId : int
+    + filename : String
+    + originalName : String
+    + mimeType : String
+    + size : int
+    + url : String
+    + createdAt : DateTime
+}
+
+' ==========================================
+' SCHEDULING, MEETINGS & REMINDERS
+' ==========================================
+
+class PersonalEvent {
+    + id : int
+    + userId : int
+    + title : String
+    + description : String
+    + startTime : DateTime
+    + endTime : DateTime
+    + recurring : boolean
+    + recurrenceRule : String
+}
+
+class SharedCalendar {
+    + id : int
+    + teamId : int
+    + getEntries() : List<PersonalEvent>
+    + getDeadlines() : List<Task>
+    + getMeetings() : List<Meeting>
+}
+
+class Meeting {
+    + id : int
+    + teamId : int
+    + calendarId : int
+    + creatorId : int
+    + title : String
+    + description : String
+    + meetingLink : String
+    + startTime : DateTime
+    + endTime : DateTime
+    + status : String
+    + cancel() : void
+}
+
+class MeetingParticipant {
+    + id : int
+    + meetingId : int
+    + userId : int
+    + status : String
+}
+
+class Reminder {
+    + id : int
+    + userId : int
+    + taskId : int
+    + meetingId : int
+    + triggerTime : DateTime
+    + isTriggered : boolean
+    + createdAt : DateTime
+}
+
+class Notification {
+    + id : int
+    + recipientId : int
+    + reminderId : int
+    + type : String
+    + message : String
+    + read : boolean
+    + createdAt : DateTime
+    + markAsRead() : void
+}
+
+' ==========================================
+' COMMUNICATIONS & REPORTS
+' ==========================================
+
+class DiscussionBoard {
+    + id : int
+    + projectId : int
+    + createdAt : DateTime
+    + getAnnouncements() : List<Announcement>
+}
+
+class Announcement {
+    + id : int
+    + boardId : int
+    + authorId : int
+    + text : String
+    + isPinned : boolean
+    + timestamp : DateTime
+}
+
+class Report {
+    + id : int
+    + projectId : int
+    + type : String
+    + data : String
+    + generatedAt : DateTime
+    + generateProgressReport() : Report
+    + generateTaskCompletionReport() : Report
+    + generateUsageReport() : Report
+}
+
+' ==========================================
+' RELATIONSHIPS (STRICT SPECIFICATION)
+' ==========================================
+
+User "1" *-- "0..*" Session : manages
+User "1" -- "0..*" TeamMembership : participates
+Team "1" -- "0..*" TeamMembership : includes
+TeamMembership "0..*" -- "1" User : associates
+
+Team "1" *-- "0..*" Project : organizes
+Team "1" *-- "1" SharedCalendar : provisions (1:1)
+
+Project "1" *-- "0..*" Milestone : tracks
+Project "1" *-- "0..*" Task : contains
+Project "1" *-- "1" DiscussionBoard : owns (1:1)
+Project "1" *-- "0..*" Report : analyzes
+
+Task "1" -- "0..*" TaskAssignment : assignees
+TaskAssignment "0..*" -- "1" User : assignedTo
+Task "1" *-- "0..*" Comment : has
+Task "1" *-- "0..*" FileAttachment : holds
+
+User "1" *-- "0..*" PersonalEvent : schedules
+SharedCalendar "1" o-- "0..*" Meeting : aggregates
+SharedCalendar ..> Task : observes deadlines
+
+Meeting "1" -- "0..*" MeetingParticipant : coordinates
+MeetingParticipant "0..*" -- "1" User : attends
+
+Task "1" *-- "0..*" Reminder : schedules
+Meeting "1" *-- "0..*" Reminder : schedules
+
+User "1" *-- "0..*" Notification : receives
+Reminder "1" -- "0..*" Notification : emits
+
+DiscussionBoard "1" *-- "0..*" Announcement : posts
+Announcement "0..*" -- "1" User : authoredBy
+
+@enduml
