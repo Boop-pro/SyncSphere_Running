@@ -28,6 +28,10 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Deployment CLI configs
+.neon
+.vercel
+
 # Local uploads
 SyncSphere/backend/uploads/*
 !SyncSphere/backend/uploads/.gitkeep
