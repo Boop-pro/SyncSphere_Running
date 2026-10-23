@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: syncsphere-backend
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: SyncSphere/backend
+    buildCommand: npm install && npx prisma generate
+    startCommand: npm start
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CLIENT_URL
+        sync: false
