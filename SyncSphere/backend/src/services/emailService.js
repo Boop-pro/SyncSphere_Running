@@ -41,12 +41,10 @@ export const sendPasswordResetEmail = async (toEmail, resetToken) => {
     `,
   };
 
-  // Always log token to terminal for immediate development convenience & verification testing
-  console.log('--------------------------------------------------');
-  console.log(`[EMAIL SERVICE] Password Reset Verification Token for ${toEmail}:`);
-  console.log(`Token: ${resetToken}`);
-  console.log(`Reset Link: ${resetLink}`);
-  console.log('--------------------------------------------------');
+  // In development, log a generic dispatch notice without exposing raw secret tokens
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[EMAIL SERVICE] Password reset requested for recipient: ${toEmail}`);
+  }
 
   try {
     if (process.env.SMTP_USER && process.env.SMTP_USER !== 'your-smtp-username') {

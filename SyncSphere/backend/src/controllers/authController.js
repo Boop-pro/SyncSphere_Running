@@ -2,11 +2,13 @@ import * as authService from '../services/authService.js';
 
 const COOKIE_NAME = 'syncsphere_session';
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 const setSessionCookie = (res, token, expiry) => {
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax',
     expires: expiry,
   });
 };
@@ -27,6 +29,7 @@ export const register = async (req, res, next) => {
       success: true,
       message: 'Account registered successfully.',
       user,
+      token: sessionToken,
     });
   } catch (error) {
     next(error);
@@ -47,6 +50,7 @@ export const login = async (req, res, next) => {
       success: true,
       message: 'Signed in successfully.',
       user,
+      token: sessionToken,
     });
   } catch (error) {
     next(error);
@@ -55,9 +59,15 @@ export const login = async (req, res, next) => {
 
 export const logout = async (req, res, next) => {
   try {
-    const token = req.cookies?.[COOKIE_NAME] || req.headers['x-session-token'];
+    const authHeader = req.headers.authorization;
+    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+    const token = req.cookies?.[COOKIE_NAME] || bearerToken || req.headers['x-session-token'];
     await authService.logoutUser(token);
-    res.clearCookie(COOKIE_NAME);
+    res.clearCookie(COOKIE_NAME, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+    });
 
     res.status(200).json({
       success: true,

@@ -2,7 +2,9 @@ import prisma from '../config/db.js';
 
 export const requireAuth = async (req, res, next) => {
   try {
-    const token = req.cookies?.syncsphere_session || req.headers['x-session-token'];
+    const authHeader = req.headers.authorization;
+    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+    const token = req.cookies?.syncsphere_session || bearerToken || req.headers['x-session-token'];
 
     if (!token) {
       return res.status(401).json({

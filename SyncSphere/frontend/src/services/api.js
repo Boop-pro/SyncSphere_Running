@@ -8,6 +8,19 @@ const api = axios.create({
   },
 });
 
+// Request interceptor to attach session token as fallback for cookie-restricted environments
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('syncsphere_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+      config.headers['X-Session-Token'] = token;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 // Response interceptor to handle session expiration or network failures cleanly
 api.interceptors.response.use(
   (response) => response,

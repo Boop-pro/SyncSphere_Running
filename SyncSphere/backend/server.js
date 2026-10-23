@@ -28,10 +28,34 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
+// Trust reverse proxy in production (Render, Heroku, etc.) for secure cookie handling
+app.set('trust proxy', 1);
+
+const configuredClients = (process.env.CLIENT_URL || '')
+  .split(',')
+  .map((url) => url.trim().replace(/\/$/, ''))
+  .filter(Boolean);
+
+const defaultDevClients = ['http://localhost:5173', 'http://127.0.0.1:5173'];
+
+const allowedOrigins = [
+  ...configuredClients,
+  ...(process.env.NODE_ENV !== 'production' ? defaultDevClients : []),
+];
+
 // 1. Cross-Origin Resource Sharing (CORS) with Credentials
 app.use(
   cors({
-    origin: CLIENT_URL,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. server-to-server health checks, curl)
+      if (!origin) {
+        return callback(null, true);
+      }
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS policy rejection: Origin ${origin} is not allowed.`));
+    },
     credentials: true, // Allows HTTP-only session cookies
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Token'],
@@ -71,7 +95,7 @@ app.use('/api/v1/reports', reportRoutes);
 app.use(errorHandler);
 
 // 7. Start Server & Background Schedulers
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('==================================================');
   console.log(` SyncSphere Backend running on http://localhost:${PORT}`);
   console.log(` Client URL configured: ${CLIENT_URL}`);
